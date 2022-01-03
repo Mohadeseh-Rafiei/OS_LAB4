@@ -15,10 +15,15 @@ struct {
 
 typedef struct {
     int value;
-    struct spinlock lock;
+    struct proc* list[32];
+    int cnt;
+    int head;
+    struct spinlock temp_lock;
 } semaphore ;
 
 semaphore sema[5];
+
+struct spinlock temp_lock = {.locked = 0};
 
 static struct proc *initproc;
 
@@ -545,6 +550,8 @@ int
 sem_init(int i, int value)
 {
     sema[i].value = value;
+    char temp[] = {(char)(i - '0')};
+    initlock(&sema[i].temp_lock, temp);
     return 0;
 }
 
@@ -552,9 +559,16 @@ int
 sem_acquire(int i)
 {
     sema[i].value -= 1;
-    if(sema[i].value <= 1) {
-        acquire(&sema[i].lock);
+    struct proc* curproc = myproc();
+    if(sema[i].value < 0) {
+        sema[i].list[sema[i].cnt] = curproc;
+        sema[i].cnt += 1; 
+        sema[i].cnt %= 32;
+        acquire(&sema[i].temp_lock);
+        sleep(curproc, &sema[i].temp_lock);
+        release(&sema[i].temp_lock);
     }
+    cprintf("spoon %d has picked up by philosopher %d\n", i, curproc->pid);
     return 0;
 }
 
@@ -562,7 +576,15 @@ int
 sem_release(int i)
 {
     sema[i].value += 1;
-    release(&sema[i].lock);
+    struct proc* curproc = myproc();
+    cprintf("spoon %d has put down by philosopher %d\n", i, curproc->pid);
+    if(sema[i].head == sema[i].cnt)
+      return 0;
+    struct proc* proc_need = sema[i].list[sema[i].head];
+    sema[i].head += 1;
+    sema[i].head %= 32;
+    // release(&sema[i].temp_lock);
+    wakeup1(proc_need);
     return 0;
 }
 
