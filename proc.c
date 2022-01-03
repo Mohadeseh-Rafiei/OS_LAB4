@@ -13,13 +13,12 @@ struct {
 } ptable;
 
 
-struct semaphore {
+typedef struct {
     int value;
-    int active;
     struct spinlock lock;
-};
+} semaphore ;
 
-struct semaphore sema[32];
+semaphore sema[5];
 
 static struct proc *initproc;
 
@@ -33,7 +32,7 @@ void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
-}z
+}
 
 // Must be called with interrupts disabled
 int
@@ -543,22 +542,27 @@ procdump(void)
 }
 
 int
-sem_init(int sem, int value)
+sem_init(int i, int value)
 {
-    acquire(&sema[sem].lock);
+    sema[i].value = value;
+    return 0;
+}
 
-    if (sema[sem].active == 0)
-    {
-        sema[sem].active = 1;
-        sema[sem].value = value;
+int
+sem_acquire(int i)
+{
+    sema[i].value -= 1;
+    if(sema[i].value <= 1) {
+        acquire(&sema[i].lock);
     }
-    else
-    {
-        return -1;
-    }
+    return 0;
+}
 
-    release(&sema[sem].lock);
-
+int
+sem_release(int i)
+{
+    sema[i].value += 1;
+    release(&sema[i].lock);
     return 0;
 }
 
